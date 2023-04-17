@@ -4,7 +4,6 @@ var router = express.Router();
 var fs = require("fs");
 
 // start by creating data so we don't have to type it in each time
-let ServerMovieArray = [];
 let ServerOrderArray = [];
 
 // define a constructor to create movie objects
@@ -17,6 +16,23 @@ let orderObject = function (storeID, salesPersonID, cdID, pricePaid, date) {
   this.Date = date;
 };
 
+const mongoose = require("mongoose");
+
+const orderSchema = require("../orderSchema");
+
+// edited to include my non-admin, user level account and PW on mongo atlas
+// and also to include the name of the mongo DB that the collection is in (MoviesDB)
+const dbURI =
+  "mongodb+srv://user:userPass@gabrielcluster.s40dwry.mongodb.net/test?retryWrites=true&w=majority";
+
+mongoose.connect(dbURI).then(
+  () => {
+    console.log("Database connection established!");
+  },
+  (err) => {
+    console.log("Error connecting Database instance due to: ", err);
+  }
+);
 
 // my file management code, embedded in an object
 fileManager = {
@@ -30,14 +46,7 @@ fileManager = {
     if (stat.size !== 0) {
       var rawdata = fs.readFileSync("ordersData.json"); // read disk file
       ServerOrderArray = JSON.parse(rawdata); // turn the file data into JSON format and overwrite our array
-      // var rawdata = fs.readFileSync("moviesData.json"); // read disk file
-      // ServerMovieArray = JSON.parse(rawdata); // turn the file data into JSON format and overwrite our array
     } else {
-      // make up 3 for testing
-      // ServerMovieArray.push(new MovieObject("Moonstruck", 1981, "Drama"));
-      // ServerMovieArray.push(new MovieObject("Wild At Heart", 1982, "Drama"));
-      // ServerMovieArray.push(new MovieObject("Raising Arizona", 1983, "Comedy"));
-      // ServerMovieArray.push(new MovieObject("USS Indianapolis", 2016, "Drama"));
       ServerOrderArray.push(new orderObject());
       fileManager.write();
     }
@@ -45,9 +54,7 @@ fileManager = {
 
   write: function () {
     let data = JSON.stringify(ServerOrderArray); // take our object data and make it writeable
-    // let data = JSON.stringify(ServerMovieArray); // take our object data and make it writeable
     fs.writeFileSync("ordersData.json", data); // write it
-    // fs.writeFileSync("moviesData.json", data); // write it
   },
 };
 
@@ -57,33 +64,54 @@ router.get("/", function (req, res, next) {
 });
 
 /* GET all Movie data */
-router.get("/getAllMovies", function (req, res) {
-  fileManager.read();
-  res.status(200).json(ServerOrderArray);
-  // res.status(200).json(ServerMovieArray);
+router.get("/getAllOrders", async function (req, res) {
+  res.status(200).json(await orderSchema.find({}));
 });
 
+router.get("/getAllLessThan10/:store", async function (req, res) {
+  res
+    .status(200)
+    .json(
+      await orderSchema
+        .find({ StoreID: req.params.store, PricePaid: { $gt: 1, $lt: 10 } })
+        .exec()
+    );
+});
 
-router.post("/SubmitOne", function (req, res) {
-  const newOrder = req.body;
-  console.log(newOrder);
+router.get("/getAllFromSalesMan/:salesID/:price", async function (req, res) {
+  res.status(200).json(
+    await orderSchema
+      .find({
+        SalesPersonID: req.params.salesID,
+        PricePaid: req.params.price,
+      })
+      .exec()
+  );
+});
+
+router.post("/AddOrder", function (req, res) {
+  let oneNewOrder = new orderSchema(req.body);
+  console.log(req.body);
+  oneNewOrder.save();
+
   var response = {
     status: 200,
     success: "Added Successfully",
   };
-  res.end(JSON.stringify(response)); // get the object from the req object sent from browser
+
+  res.end(JSON.stringify(response));
 });
 
 router.post("/Submit500", function (req, res) {
-  // console.log("hit");
-  const newOrder = req.body;
-  ServerOrderArray.push(newOrder); // add it to our "DB"  (array)
-  fileManager.write();
+  let oneNewOrder = new orderSchema(req.body);
+  console.log(req.body);
+  oneNewOrder.save();
 
   var response = {
     status: 200,
     success: "Added Successfully",
   };
+
   res.end(JSON.stringify(response));
 });
 
